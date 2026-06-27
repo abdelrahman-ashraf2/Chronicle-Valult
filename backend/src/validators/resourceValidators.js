@@ -203,6 +203,11 @@ const resourceRules = {
         .withMessage("Serial number is required.")
         .isLength({ max: 100 })
         .withMessage("Serial number must be 100 characters or fewer."),
+      body("reference_number")
+        .optional({ values: "falsy" })
+        .trim()
+        .isLength({ max: 120 })
+        .withMessage("Reference number must be 120 characters or fewer."),
       body("production_year")
         .optional({ values: "falsy" })
         .isInt({ min: 1000, max: 2100 })
@@ -248,6 +253,11 @@ const resourceRules = {
         .withMessage("Serial number cannot be empty.")
         .isLength({ max: 100 })
         .withMessage("Serial number must be 100 characters or fewer."),
+      body("reference_number")
+        .optional({ values: "falsy" })
+        .trim()
+        .isLength({ max: 120 })
+        .withMessage("Reference number must be 120 characters or fewer."),
       body("production_year")
         .optional({ values: "falsy" })
         .isInt({ min: 1000, max: 2100 })

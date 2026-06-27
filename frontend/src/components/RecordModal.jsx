@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function initialValues(fields, record) {
   return Object.fromEntries(
@@ -20,10 +20,33 @@ export default function RecordModal({
     return true;
   }), [config.fields, record]);
   const [values, setValues] = useState(() => initialValues(visibleFields, record));
+  const modalRef = useRef(null);
 
   useEffect(() => {
     setValues(initialValues(visibleFields, record));
   }, [record, visibleFields]);
+
+  useEffect(() => {
+    const focusable = modalRef.current?.querySelectorAll(
+      'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])'
+    );
+    focusable?.[0]?.focus();
+    function handleKey(event) {
+      if (event.key === "Escape") onClose();
+      if (event.key !== "Tab" || !focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
 
   function change(name, value) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -42,6 +65,7 @@ export default function RecordModal({
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        ref={modalRef}
         className="modal"
         role="dialog"
         aria-modal="true"

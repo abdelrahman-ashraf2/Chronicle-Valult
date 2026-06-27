@@ -1,56 +1,85 @@
 # Chronicle Vault
 
-Chronicle Vault is a full-stack vintage watch registry built with React, Vite, Node.js, Express, and MySQL. It now supports multi-tenant organizations, stronger API security, and role-aware dashboards for platform operators, organization admins, and members.
+Chronicle Vault is a multi-tenant vintage watch authentication and provenance
+platform built with React, Vite, Node.js, Express, and MySQL.
 
 ## Features
 
-- Public landing page and serial-number lookup
-- Database-backed JWT authentication with bcrypt password hashing
-- Multi-tenant Organizations model
-- `SuperAdmin`, `OrgAdmin`, and `User` roles
-- Organization-scoped CRUD permissions enforced in SQL-backed API handlers
-- Revocable sessions, account disabling, soft archival, and immutable audit events
-- Auth-aware frontend navigation with protected and role-based routes
-- Rate-limited login endpoint, `helmet`, input validation, and centralized error handling
-- `production_year` used consistently across backend, frontend, and schema
+- Premium public landing page, serial lookup, and token verification pages
+- Secure HttpOnly-cookie JWT sessions with bcrypt password hashing
+- `SuperAdmin`, `OrgAdmin`, and `User` permissions
+- Tenant-scoped watch dossiers, provenance, evidence, parts, auctions, and checks
+- Authentication cases with comments, evidence requests, transitions, and outcomes
+- Public QR verification controlled by organization administrators
+- Ownership transfers, invitations, team members, and in-app notifications
+- Plans with enforced watch, user, evidence, API, webhook, and white-label limits
+- API keys, signed webhooks, CSV import, and CSV export
+- Paginated APIs, responsive dashboards, dialogs, empty states, and confirmations
+- Soft archival, audit events, rate limiting, Helmet, CORS, CSRF origin checks, and centralized errors
+- `production_year` used consistently throughout the application
 
 Report generation is intentionally not included.
 
 ## Permissions
 
-- **SuperAdmin:** Can view and manage all organizations and all registry data.
-- **OrgAdmin:** Can manage users, brands, movements, watches, parts, auctions, and checks inside their own organization only.
-- **User:** Cannot see the Users page, can manage only their own watches, and can only view parts, auctions, and checks tied to those watches.
-- **Public:** Can look up an exact serial number and view safe authentication fields only. Ownership and private notes are never exposed.
+- **SuperAdmin:** Views and manages all organizations and registry data.
+- **OrgAdmin:** Manages members and data only inside their organization.
+- **User:** Manages only their own watches and sees related records only.
+- **Public:** Sees safe verification fields only. Owner data and private notes are never exposed.
 
-The backend never trusts `user_id` or `organization_id` from the frontend. Those values are derived from the authenticated session and validated against organization scope.
+The backend derives `user_id` and `organization_id` from the authenticated
+session. It never trusts those values from a normal-user form.
 
-## Database
+## Local Setup
 
-For a new local database, run the development bootstrap schema:
+Install dependencies:
+
+```powershell
+npm run install:all
+```
+
+Create `backend/.env` from `backend/.env.example` and set it to match your
+local MySQL credentials.
+
+Create and seed a development database:
 
 ```powershell
 Get-Content -Raw database\schema.sql | & "C:\Program Files\MySQL\MySQL Server 9.6\bin\mysql.exe" -u root -p
 Get-Content -Raw database\seeds\demo.sql | & "C:\Program Files\MySQL\MySQL Server 9.6\bin\mysql.exe" -u root -p
+npm run migrate
 ```
 
-The bootstrap schema recreates the database, and the separate demo seed adds
-sample records. Do not run either against an existing production database.
-Default demo accounts:
+The bootstrap schema recreates the database. Do not run it or the demo seed
+against a production database. For an existing database, run only:
+
+```powershell
+npm run migrate
+```
+
+Start the app in separate terminals:
+
+```powershell
+npm run dev:backend
+npm run dev:frontend
+```
+
+Open `http://localhost:5173`.
+
+## Demo Accounts
 
 | Role | Username | Password |
 | --- | --- | --- |
 | SuperAdmin | `superadmin` | `Vintage123!` |
 | OrgAdmin | `admin` | `Vintage123!` |
 | User | `viewer` | `Vintage123!` |
-| OrgAdmin (2nd org) | `dealer` | `Vintage123!` |
-| User (2nd org) | `collector` | `Vintage123!` |
+| OrgAdmin, second tenant | `dealer` | `Vintage123!` |
+| User, second tenant | `collector` | `Vintage123!` |
 
 Sample public serial: `CV-OMEGA-1969-001`
 
-## Configuration
+## Environment
 
-Create `backend/.env` from `backend/.env.example`:
+Backend:
 
 ```env
 PORT=5000
@@ -63,109 +92,122 @@ JWT_SECRET=replace_with_a_long_random_secret
 JWT_EXPIRES_IN=30m
 JWT_ISSUER=chronicle-vault
 JWT_AUDIENCE=chronicle-vault-web
+AUTH_COOKIE_NAME=chronicle_session
+UPLOAD_DIR=uploads
+MAX_UPLOAD_MB=10
 CLIENT_URL=http://localhost:5173,http://127.0.0.1:5173
 ```
 
-The frontend defaults to `http://localhost:5000/api`. Override it in `frontend/.env`:
+Frontend:
 
 ```env
 VITE_API_URL=http://localhost:5000/api
 ```
 
-## Run
-
-Install dependencies:
-
-```powershell
-npm run install:all
-```
-
-Start the backend and frontend in separate terminals:
-
-```powershell
-npm run dev:backend
-npm run dev:frontend
-```
-
-Open `http://127.0.0.1:5173`.
-
-For an existing database, apply versioned, non-destructive migrations before
-starting the API:
-
-```powershell
-npm run migrate
-```
-
-## Deployment
-
-GitHub stores the source code and runs the CI workflow, but GitHub Pages cannot
-run the Express API or MySQL database.
-
-A practical production setup is:
-
-- GitHub: source control and CI
-- Vercel or Netlify: `frontend`
-- Render, Railway, or Fly.io: `backend`
-- Railway, Aiven, PlanetScale-compatible MySQL, or another managed MySQL host:
-  database
-
-Configure the backend host with all values from `backend/.env.example`. Set
-`CLIENT_URL` to the deployed frontend URL. Configure the frontend host with:
-
-```env
-VITE_API_URL=https://your-api-host.example/api
-```
-
-Run `npm run migrate` against the production database before starting the
-backend. Never upload `backend/.env`, database passwords, or JWT secrets to
-GitHub.
-
-## Security Notes
+## Security
 
 - Passwords are hashed with `bcryptjs`
-- JWTs are required for all private API routes
-- Every request reloads current role, organization, status, and token version
-- Password, role, and status changes revoke existing sessions
-- CRUD deletions archive records and write an audit event
-- `helmet` sets secure HTTP headers
-- Login is rate-limited with `express-rate-limit`
-- Inputs are validated with `express-validator`
-- SQL access uses prepared statements via `mysql2/promise`
-- Centralized error handling returns safe `401`, `403`, `404`, and validation responses
+- JWTs use `HttpOnly`, `SameSite` cookies
+- Current role, tenant, status, and token version are reloaded on every request
+- Account changes and logout revoke existing sessions
+- State-changing cookie requests require an approved `Origin`
+- SQL uses prepared statements
+- Uploads are type-checked, size-limited, private, and access-controlled
+- Subscription capacity is enforced server-side
+- Login is rate-limited and all inputs pass validation
+- Password fields are never included in API responses
 
-## API
+## API Highlights
 
 Public:
 
 ```text
-GET /api/health
-GET /api/public/lookup/:serial
+GET  /api/health
+GET  /api/public/lookup/:serial
+GET  /api/public/verify/:token
+GET  /api/v1/plans
 POST /api/auth/login
-POST /api/auth/logout
 ```
 
 Authenticated:
 
 ```text
-GET /api/auth/me
-GET /api/auth/me/dashboard
-GET /api/dashboard/summary
-GET /api/:resource
-GET /api/:resource/:id
-POST /api/:resource
-PUT /api/:resource/:id
-DELETE /api/:resource/:id
+GET  /api/auth/me
+POST /api/auth/logout
+GET  /api/auth/me/dashboard
+GET  /api/v1/watches
+GET  /api/v1/watches/:id
+GET|POST /api/v1/cases
+GET|PATCH /api/v1/cases/:id
+POST /api/v1/evidence
+GET|POST /api/v1/transfers
+GET  /api/v1/notifications
+GET|POST /api/v1/api-keys
+GET|POST /api/v1/webhooks
+POST /api/v1/imports/watches.csv
+GET  /api/v1/exports/:resource.csv
 ```
 
-Available resources:
+Legacy CRUD endpoints remain at `/api/:resource` for organizations, users,
+brands, movements, watches, parts, auctions, and checks.
+
+Partner API:
 
 ```text
-organizations
-users
-brands
-movements
-watches
-parts
-auctions
-checks
+GET /api/partner/v1/watches
+x-api-key: cv_live_...
 ```
+
+Webhook deliveries include `X-Chronicle-Event` and
+`X-Chronicle-Signature`. The signature is HMAC-SHA256 over the raw JSON body
+using the signing secret shown once when the webhook is created.
+
+## CSV Import
+
+OrgAdmins can import up to 500 watches per CSV. Required columns:
+
+```text
+brand_name,model_name,serial_number
+```
+
+Optional columns:
+
+```text
+movement_name,owner_username,reference_number,production_year,case_material,watch_condition
+```
+
+References must already exist in the same organization. An invalid row rolls
+back the entire import.
+
+## Tests
+
+Run unit tests and the production frontend build:
+
+```powershell
+npm run check
+```
+
+Run the opt-in MySQL integration suite against the demo database:
+
+```powershell
+$env:RUN_DB_TESTS="1"
+$env:NODE_ENV="test"
+npm test --prefix backend
+```
+
+## Deployment
+
+GitHub stores source code and runs CI; GitHub Pages cannot run Express or MySQL.
+A practical production layout is:
+
+- Vercel or Netlify for `frontend`
+- Render, Railway, or Fly.io for `backend`
+- A managed MySQL provider for the database
+
+Set `CLIENT_URL` to the deployed frontend origin, set `VITE_API_URL` to the
+deployed API `/api` URL, use a long random `JWT_SECRET`, configure a persistent
+private volume for `UPLOAD_DIR`, and run `npm run migrate` before starting the
+production backend.
+
+Never commit `.env`, database passwords, JWT secrets, uploaded evidence, API
+keys, or webhook secrets.

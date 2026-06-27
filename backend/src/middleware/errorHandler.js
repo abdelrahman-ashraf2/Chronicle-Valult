@@ -27,6 +27,18 @@ export function errorHandler(error, _req, res, _next) {
     return res.status(409).json({ message: "This record is still referenced by other records." });
   }
 
+  if (error.code === "LIMIT_FILE_SIZE") {
+    return res.status(413).json({ message: "Evidence file is too large." });
+  }
+
+  if (
+    error.name === "MulterError" ||
+    error.message === "Unsupported evidence file type." ||
+    error.message === "Only CSV files are supported."
+  ) {
+    return res.status(400).json({ message: error.message });
+  }
+
   console.error(error);
   return res.status(500).json({ message: "Internal server error." });
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../services/api.js";
 import { ROLES } from "../config/roles.js";
 import RecordModal from "./RecordModal.jsx";
+import ConfirmDialog from "./ConfirmDialog.jsx";
 
 function displayValue(value, key) {
   if (value === null || value === undefined || value === "") return "-";
@@ -39,6 +40,9 @@ export default function CrudTable({ resource, config, user }) {
   const [editing, setEditing] = useState(undefined);
   const [saving, setSaving] = useState(false);
   const [lookups, setLookups] = useState({});
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const modalFields = fieldsForRole(config, user.role);
   const lookupResources = useMemo(
@@ -51,13 +55,16 @@ export default function CrudTable({ resource, config, user }) {
   const canDelete = canAct(config, user.role, "delete");
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    const timer = setTimeout(() => {
+      setPage(1);
+      setDebouncedSearch(search);
+    }, 300);
     return () => clearTimeout(timer);
   }, [search]);
 
   useEffect(() => {
     loadRecords();
-  }, [resource, debouncedSearch]);
+  }, [resource, debouncedSearch, page]);
 
   useEffect(() => {
     if (!canCreate || !lookupResources.length) return;
@@ -75,7 +82,13 @@ export default function CrudTable({ resource, config, user }) {
     setLoading(true);
     setError("");
     try {
-      setRecords(await api.list(resource, debouncedSearch));
+      const result = await api.listPaged(resource, {
+        search: debouncedSearch,
+        page,
+        pageSize: 20
+      });
+      setRecords(result.items);
+      setPagination(result.pagination);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -104,20 +117,11 @@ export default function CrudTable({ resource, config, user }) {
   }
 
   async function deleteRecord(record) {
-    const label =
-      record.model_name ||
-      record.brand_name ||
-      record.movement_name ||
-      record.organization_name ||
-      record.username ||
-      record.part_name ||
-      "this record";
-    if (!window.confirm(`Delete ${label}? This action cannot be undone.`)) return;
-
     setError("");
     try {
       await api.remove(resource, record[config.idKey]);
-      setNotice("Record deleted.");
+      setNotice("Record archived.");
+      setPendingDelete(null);
       await loadRecords();
     } catch (requestError) {
       setError(requestError.message);
@@ -136,7 +140,7 @@ export default function CrudTable({ resource, config, user }) {
           />
         </div>
         <div className="toolbar-meta">
-          <span>{records.length} record{records.length === 1 ? "" : "s"}</span>
+          <span>{pagination.total} record{pagination.total === 1 ? "" : "s"}</span>
           {canCreate && (
             <button className="button primary" onClick={() => setEditing(null)}>
               + Add {config.singular}
@@ -176,7 +180,7 @@ export default function CrudTable({ resource, config, user }) {
                   {(canEdit || canDelete) && (
                     <td className="row-actions">
                       {canEdit && <button className="text-button" onClick={() => setEditing(record)}>Edit</button>}
-                      {canDelete && <button className="text-button danger" onClick={() => deleteRecord(record)}>Delete</button>}
+                      {canDelete && <button className="text-button danger" onClick={() => setPendingDelete(record)}>Archive</button>}
                     </td>
                   )}
                 </tr>
@@ -184,6 +188,11 @@ export default function CrudTable({ resource, config, user }) {
             )}
           </tbody>
         </table>
+      </div>
+      <div className="pagination">
+        <button className="button secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
+        <span>Page {page} of {pagination.totalPages || 1}</span>
+        <button className="button secondary" disabled={page >= (pagination.totalPages || 1)} onClick={() => setPage(page + 1)}>Next</button>
       </div>
 
       {editing !== undefined && (
@@ -194,6 +203,15 @@ export default function CrudTable({ resource, config, user }) {
           saving={saving}
           onClose={() => setEditing(undefined)}
           onSave={saveRecord}
+        />
+      )}
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Archive record?"
+          message="The record will disappear from active views but remain available for audit history."
+          confirmLabel="Archive"
+          onClose={() => setPendingDelete(null)}
+          onConfirm={() => deleteRecord(pendingDelete)}
         />
       )}
     </section>

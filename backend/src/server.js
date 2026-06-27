@@ -1,4 +1,5 @@
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import express from "express";
 import helmet from "helmet";
 import { testConnection } from "./config/db.js";
@@ -6,6 +7,9 @@ import { env } from "./config/env.js";
 import authRoutes from "./routes/authRoutes.js";
 import publicRoutes from "./routes/publicRoutes.js";
 import resourceRoutes from "./routes/resourceRoutes.js";
+import platformRoutes from "./routes/platformRoutes.js";
+import partnerRoutes from "./routes/partnerRoutes.js";
+import { requireTrustedOrigin } from "./middleware/csrf.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { ForbiddenError } from "./utils/httpErrors.js";
 
@@ -25,6 +29,8 @@ app.use(
     credentials: true
   })
 );
+app.use(cookieParser());
+app.use(requireTrustedOrigin);
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/health", (_req, res) => {
@@ -33,6 +39,8 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/public", publicRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/v1", platformRoutes);
+app.use("/api/partner/v1", partnerRoutes);
 app.use("/api", resourceRoutes);
 app.use(notFoundHandler);
 app.use(errorHandler);

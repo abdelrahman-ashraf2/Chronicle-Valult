@@ -35,6 +35,9 @@ export const env = Object.freeze({
     issuer: process.env.JWT_ISSUER || "chronicle-vault",
     audience: process.env.JWT_AUDIENCE || "chronicle-vault-web"
   },
+  authCookieName: process.env.AUTH_COOKIE_NAME || "chronicle_session",
+  uploadDir: process.env.UPLOAD_DIR || "uploads",
+  maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 10),
   clientOrigins: (
     process.env.CLIENT_URL ||
     process.env.CLIENT_ORIGINS ||

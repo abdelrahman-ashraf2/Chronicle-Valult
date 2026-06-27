@@ -203,6 +203,7 @@ export const resourceConfigs = {
       lookup("user_id", "Owner", "users", "user_id", "username", { required: true }),
       text("model_name", "Model name", { required: true }),
       text("serial_number", "Serial number", { required: true }),
+      text("reference_number", "Reference number"),
       number("production_year", "Production year", { min: 1000, max: 2100 }),
       text("case_material", "Case material"),
       select("watch_condition", "Condition", ["Mint", "Excellent", "Good", "Fair", "Poor"], {
@@ -214,6 +215,7 @@ export const resourceConfigs = {
       lookup("movement_id", "Movement", "movements", "movement_id", "movement_name"),
       text("model_name", "Model name", { required: true }),
       text("serial_number", "Serial number", { required: true }),
+      text("reference_number", "Reference number"),
       number("production_year", "Production year", { min: 1000, max: 2100 }),
       text("case_material", "Case material"),
       select("watch_condition", "Condition", ["Mint", "Excellent", "Good", "Fair", "Poor"], {

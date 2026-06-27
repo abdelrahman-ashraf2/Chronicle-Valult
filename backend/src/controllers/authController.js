@@ -61,7 +61,14 @@ export async function login(req, res, next) {
       actorUserId: user.user_id
     });
 
-    return res.json({ token, user: safeUser });
+    res.cookie(env.authCookieName, token, {
+      httpOnly: true,
+      secure: env.nodeEnv === "production",
+      sameSite: env.nodeEnv === "production" ? "none" : "lax",
+      maxAge: 30 * 60 * 1000,
+      path: "/"
+    });
+    return res.json({ user: safeUser });
   } catch (error) {
     return next(error);
   }
@@ -84,6 +91,12 @@ export async function logout(req, res, next) {
       action: "auth.logout_all",
       resourceType: "users",
       resourceId: req.user.id
+    });
+    res.clearCookie(env.authCookieName, {
+      httpOnly: true,
+      secure: env.nodeEnv === "production",
+      sameSite: env.nodeEnv === "production" ? "none" : "lax",
+      path: "/"
     });
     return res.json({ message: "Signed out." });
   } catch (error) {

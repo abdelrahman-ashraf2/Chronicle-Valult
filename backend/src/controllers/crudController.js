@@ -1,8 +1,10 @@
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import pool from "../config/db.js";
 import { getResource } from "../config/resources.js";
 import { ROLES, isOrgAdmin, isSuperAdmin, isUser } from "../config/roles.js";
 import { writeAuditEvent } from "../services/auditService.js";
+import { assertResourceCapacity } from "../services/entitlementService.js";
 import {
   BadRequestError,
   ForbiddenError,
@@ -385,6 +387,8 @@ async function prepareWatchCreate(req, data) {
     user_id: ownerUser.user_id,
     model_name: data.model_name,
     serial_number: data.serial_number,
+    reference_number: data.reference_number,
+    public_token: crypto.randomUUID(),
     production_year: data.production_year,
     case_material: data.case_material,
     watch_condition: data.watch_condition
@@ -429,6 +433,7 @@ async function prepareWatchUpdate(req, data, existing) {
     ...(data.user_id !== undefined ? { user_id: ownerUser.user_id } : {}),
     ...(data.model_name !== undefined ? { model_name: data.model_name } : {}),
     ...(data.serial_number !== undefined ? { serial_number: data.serial_number } : {}),
+    ...(data.reference_number !== undefined ? { reference_number: data.reference_number } : {}),
     ...(data.production_year !== undefined ? { production_year: data.production_year } : {}),
     ...(data.case_material !== undefined ? { case_material: data.case_material } : {}),
     ...(data.watch_condition !== undefined ? { watch_condition: data.watch_condition } : {})
@@ -683,11 +688,38 @@ export async function listRecords(req, res, next) {
       : quote(resource.id);
     const where = buildWhere(req, resource, search);
 
-    const [rows] = await pool.execute(
-      `SELECT ${select} FROM ${from}${where.sql} ORDER BY ${idColumn} DESC`,
-      where.values
-    );
-    return res.json(rows);
+    const requestedPage = Number(req.query.page);
+    if (!requestedPage) {
+      const [rows] = await pool.execute(
+        `SELECT ${select} FROM ${from}${where.sql} ORDER BY ${idColumn} DESC`,
+        where.values
+      );
+      return res.json(rows);
+    }
+
+    const page = Math.max(1, requestedPage);
+    const pageSize = Math.min(100, Math.max(5, Number(req.query.pageSize) || 20));
+    const offset = (page - 1) * pageSize;
+    const [[rows], [counts]] = await Promise.all([
+      pool.execute(
+        `SELECT ${select} FROM ${from}${where.sql}
+         ORDER BY ${idColumn} DESC LIMIT ${pageSize} OFFSET ${offset}`,
+        where.values
+      ),
+      pool.execute(
+        `SELECT COUNT(*) AS total FROM ${from}${where.sql}`,
+        where.values
+      )
+    ]);
+    return res.json({
+      items: rows,
+      pagination: {
+        page,
+        pageSize,
+        total: counts[0].total,
+        totalPages: Math.ceil(counts[0].total / pageSize)
+      }
+    });
   } catch (error) {
     return next(error);
   }
@@ -742,6 +774,9 @@ export async function createRecord(req, res, next) {
 
     const rawData = writablePayload(req.body, resource.createFields);
     const data = await buildCreatePayload(req, req.params.resource, rawData);
+    if (["users", "watches"].includes(req.params.resource) && data.organization_id) {
+      await assertResourceCapacity(data.organization_id, req.params.resource);
+    }
     const fields = Object.keys(data);
 
     if (!fields.length) {

@@ -15,13 +15,17 @@ export function createRequireAuth({
 } = {}) {
   return async function requireAuthMiddleware(req, _res, next) {
     const authorization = req.headers.authorization;
+    const bearerToken = authorization?.startsWith("Bearer ")
+      ? authorization.slice(7)
+      : null;
+    const token = req.cookies?.[env.authCookieName] || bearerToken;
 
-    if (!authorization?.startsWith("Bearer ")) {
+    if (!token) {
       return next(new UnauthorizedError("Authentication token is required."));
     }
 
     try {
-      const claims = verifyToken(authorization.slice(7));
+      const claims = verifyToken(token);
       const user = await findSessionUser(claims.sub || claims.id);
 
       if (

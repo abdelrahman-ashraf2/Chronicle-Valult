@@ -55,3 +55,32 @@ export async function lookupSerial(req, res, next) {
     return next(error);
   }
 }
+
+export async function verifyPublicToken(req, res, next) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT w.watch_id, w.model_name, w.serial_number, w.reference_number,
+              w.production_year, w.case_material, w.watch_condition,
+              b.brand_name, o.organization_name, o.logo_url, o.accent_color
+       FROM Watches w
+       LEFT JOIN Brands b ON w.brand_id = b.brand_id
+       LEFT JOIN Organizations o ON w.organization_id = o.organization_id
+       WHERE w.public_token = ? AND w.public_visibility = 'Verified'
+         AND w.archived_at IS NULL AND o.archived_at IS NULL
+       LIMIT 1`,
+      [req.params.token]
+    );
+    if (!rows[0]) throw new NotFoundError("This public verification is not available.");
+    const watch = rows[0];
+    const [checks] = await pool.execute(
+      `SELECT check_date, serial_status, parts_status, auction_status, final_result
+       FROM AuthenticationChecks
+       WHERE watch_id = ? AND archived_at IS NULL
+       ORDER BY check_date DESC, check_id DESC LIMIT 1`,
+      [watch.watch_id]
+    );
+    return res.json({ watch, latestCheck: checks[0] || null });
+  } catch (error) {
+    return next(error);
+  }
+}

@@ -1,18 +1,11 @@
-import { useEffect } from "react";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
-export default function ProtectedRoute({ children, onNavigate }) {
+export default function ProtectedRoute() {
   const { isAuthenticated, isReady } = useAuth();
-
-  useEffect(() => {
-    if (isReady && !isAuthenticated) {
-      onNavigate("login", { replace: true });
-    }
-  }, [isAuthenticated, isReady, onNavigate]);
-
-  if (!isReady) {
-    return null;
-  }
-
-  return isAuthenticated ? children : null;
+  const location = useLocation();
+  if (!isReady) return <div className="app-loading">Checking your vault...</div>;
+  return isAuthenticated
+    ? <Outlet />
+    : <Navigate to="/login" replace state={{ from: location.pathname }} />;
 }
